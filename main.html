@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Personal Scheduler & Bulletin Board</title>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet" />
+        <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css" rel="stylesheet" />
+        <link href="main.css" rel="stylesheet" />
+    </head>
+    <body>
+        <!--네비게이션 바-->
+        <nav class="navbar navbar-light bg-light border-bottom px-3">
+            <div class="container-fluid">
+                <span class="navbar-brand">Personal Scheduler & Bulletin Board</span>
+                <div class="d-flex">
+                    <button id="newPostBtn" class="btn btn-write">
+                        <span class="emoji-icon">✍️</span>
+                        새 글쓰기
+                    </button>
+                    <div class="dropdown">
+                        <button class="btn" id="profileDropdown" data-bs-toggle="dropdown">
+                            <span class="emoji-icon">👤</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileDropdown">
+                            <!-- 드롭다운 항목들은 JavaScript에서 동적으로 추가됩니다 -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!--메인 컨테이너-->
+        <div class="container-fluid">
+            <div class="row">
+                <!-- 첫 번째 행 -->
+                <div class="col-md-8">
+                    <!-- 캘린더 섹션 -->
+                    <div class="main-container">
+                        <div class="card calendar-card h-100">
+                            <div class="card-body">
+                                <div class="calendar-header">
+                                    <div class="calendar-nav">
+                                        <button class="btn btn-outline-primary" id="prevMonth">◀</button>
+                                        <h5 class="mb-0 card-title">
+                                            <span class="emoji-icon">📅</span>
+                                            <span id="currentMonth"></span>
+                                        </h5>
+                                        <button class="btn btn-outline-primary" id="nextMonth">▶</button>
+                                    </div>
+                                </div>
+                                <div class="calendar">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>일</th>
+                                                <th>월</th>
+                                                <th>화</th>
+                                                <th>수</th>
+                                                <th>목</th>
+                                                <th>금</th>
+                                                <th>토</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- JavaScript로 동적 생성됨 -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 선택된 날짜 게시글 섹션 -->
+                <div class="col-md-4">
+                    <div class="main-container">
+                        <div class="card posts-card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <span class="emoji-icon">📌</span>
+                                    <span id="selectedDate">오늘의 게시글</span>
+                                </h5>
+                                <div class="list-group">
+                                    <!-- JavaScript로 동적 생성됨 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 커뮤니티 섹션 -->
+                <div class="col-md-6">
+                    <div class="main-container">
+                        <div class="card untagged-card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title"><span class="emoji-icon">🗂️</span>이용자 커뮤니티</h5>
+                                <div class="list-group">
+                                    <!-- JavaScript로 동적 생성됨 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 공지사항 섹션 -->
+                <div class="col-md-6">
+                    <div class="main-container">
+                        <div class="card notice-card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title"><span class="emoji-icon">📢</span>공지사항</h5>
+                                <div class="list-group">
+                                    <!-- JavaScript로 동적 생성됨 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script type="module" src="app.js"></script>
+    </body>
+</html>
