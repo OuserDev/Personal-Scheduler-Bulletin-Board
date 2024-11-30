@@ -1,30 +1,28 @@
 /**
  * authModal.js - 인증 관련 모달 UI 컴포넌트
  * 로그인, 회원가입, 프로필 조회를 위한 모달 UI 템플릿 및 이벤트 핸들러 정의
+ * PHP 백엔드와 연동되어 실제 인증 처리를 수행
  */
-
-import { login, register, updateProfile } from './auth.js';
-import { getCurrentUser } from './authState.js';
 
 /**
  * 로그인 모달 템플릿
- * Bootstrap 스타일링 적용된 로그인 폼
+ * form의 action을 PHP 엔드포인트로 직접 전송하도록 설정
  */
 const loginModalTemplate = `
 <div id="loginModal" class="modal">
     <div class="modal-content" style="max-width: 400px;">
         <div class="modal-header">
             <h5 class="modal-title">로그인</h5>
-            <button class="close-btn">&times;</button>
+            <button type="button" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
-            <form id="loginForm">
+            <form action="./auth/login.php" method="POST">
                 <div class="mb-3">
-                    <input type="text" class="form-control" id="loginUsername" 
+                    <input type="text" class="form-control" name="username" 
                            placeholder="아이디" required>
                 </div>
                 <div class="mb-3">
-                    <input type="password" class="form-control" id="loginPassword" 
+                    <input type="password" class="form-control" name="password" 
                            placeholder="비밀번호" required>
                 </div>
                 <button type="submit" class="btn btn-primary w-100">로그인</button>
@@ -38,27 +36,27 @@ const loginModalTemplate = `
 
 /**
  * 회원가입 모달 템플릿
- * Bootstrap 스타일링 적용된 회원가입 폼
+ * form의 action을 PHP 엔드포인트로 직접 전송하도록 설정
  */
 const registerModalTemplate = `
 <div id="registerModal" class="modal">
     <div class="modal-content" style="max-width: 400px;">
         <div class="modal-header">
             <h5 class="modal-title">회원가입</h5>
-            <button class="close-btn">&times;</button>
+            <button type="button" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
-            <form id="registerForm">
+            <form action="./auth/register.php" method="POST">
                 <div class="mb-3">
-                    <input type="text" class="form-control" id="regUsername" 
+                    <input type="text" class="form-control" name="username" 
                            placeholder="아이디" required>
                 </div>
                 <div class="mb-3">
-                    <input type="password" class="form-control" id="regPassword" 
+                    <input type="password" class="form-control" name="password" 
                            placeholder="비밀번호" required>
                 </div>
                 <div class="mb-3">
-                    <input type="text" class="form-control" id="regName" 
+                    <input type="text" class="form-control" name="name" 
                            placeholder="이름" required>
                 </div>
                 <button type="submit" class="btn btn-primary w-100">가입하기</button>
@@ -72,14 +70,14 @@ const registerModalTemplate = `
 
 /**
  * 프로필 정보 조회 모달 템플릿
- * 사용자 정보를 읽기 전용으로 표시
+ * 세션에서 가져온 사용자 정보를 표시
  */
 const profileModalTemplate = `
 <div id="profileModal" class="modal">
     <div class="modal-content" style="max-width: 400px;">
         <div class="modal-header">
             <h5 class="modal-title">내 정보</h5>
-            <button class="close-btn">&times;</button>
+            <button type="button" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
             <form id="profileForm">
@@ -95,9 +93,9 @@ const profileModalTemplate = `
                     <label class="form-label">가입일</label>
                     <input type="text" class="form-control" id="profileJoinDate" readonly>
                 </div>
-                <button type="button" class="btn btn-secondary w-100" id="closeProfileBtn">
-                    닫기
-                </button>
+                <form action="./auth/logout.php" method="POST">
+                    <button type="submit" class="btn btn-secondary w-100">로그아웃</button>
+                </form>
             </form>
         </div>
     </div>
@@ -113,62 +111,23 @@ function initializeModals() {
     document.body.insertAdjacentHTML('beforeend', registerModalTemplate);
     document.body.insertAdjacentHTML('beforeend', profileModalTemplate);
 
-    // 모달 요소 참조
-    const loginModal = document.getElementById('loginModal');
-    const registerModal = document.getElementById('registerModal');
-    const profileModal = document.getElementById('profileModal');
-
-    /**
-     * 로그인 폼 제출 핸들러
-     * 사용자 인증 처리 및 결과에 따른 UI 업데이트
-     */
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const username = document.getElementById('loginUsername').value;
-        const password = document.getElementById('loginPassword').value;
-
-        if (login(username, password)) {
-            loginModal.style.display = 'none';
-            document.getElementById('loginForm').reset();
-            alert('로그인되었습니다.');
-        } else {
-            alert('아이디 또는 비밀번호가 올바르지 않습니다.');
-        }
-    });
-
-    /**
-     * 회원가입 폼 제출 핸들러
-     * 새로운 사용자 등록 및 결과에 따른 UI 업데이트
-     */
-    document.getElementById('registerForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const userData = {
-            username: document.getElementById('regUsername').value,
-            password: document.getElementById('regPassword').value,
-            name: document.getElementById('regName').value,
-        };
-
-        if (register(userData)) {
-            // 회원가입 성공 시 로그인 모달로 전환
-            registerModal.style.display = 'none';
-            loginModal.style.display = 'block';
-            document.getElementById('registerForm').reset();
-            alert('회원가입이 완료되었습니다. 로그인해주세요.');
-        } else {
-            alert('이미 사용 중인 아이디입니다.');
-        }
-    });
-
     // 모달 간 전환 버튼 이벤트 설정
     document.getElementById('showRegisterBtn').onclick = () => {
-        loginModal.style.display = 'none';
-        registerModal.style.display = 'block';
+        document.getElementById('loginModal').style.display = 'none';
+        document.getElementById('registerModal').style.display = 'block';
     };
 
     document.getElementById('showLoginBtn').onclick = () => {
-        registerModal.style.display = 'none';
-        loginModal.style.display = 'block';
+        document.getElementById('registerModal').style.display = 'none';
+        document.getElementById('loginModal').style.display = 'block';
     };
+
+    // 모달 닫기 버튼 이벤트
+    document.querySelectorAll('.close-btn').forEach((btn) => {
+        btn.onclick = () => {
+            btn.closest('.modal').style.display = 'none';
+        };
+    });
 }
 
 export { initializeModals };

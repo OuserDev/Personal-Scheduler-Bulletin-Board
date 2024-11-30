@@ -3,89 +3,125 @@
  * 달력 UI를 생성하고 관리하는 핵심 렌더링 로직을 담당
  */
 
-import { mockData } from './mockData.js';
 import { getCurrentYear, getCurrentMonth, getSelectedDate } from './calendarState.js';
-import { getCurrentUser } from './authState.js';
 
 /**
- * 캘린더 헤더의 연월 표시를 업데이트하는 함수
- * @example
- * updateCalendarHeader(); // "2024년 11월" 형식으로 표시
+ * 서버에서 현재 사용자의 인증 상태를 확인하는 함수입니다.
+ * PHP 세션을 통해 로그인된 사용자 정보를 가져옵니다.
+ */
+async function getAuthStatus() {
+    try {
+        const response = await fetch('./auth/checkAuth.php');
+        if (!response.ok) throw new Error('인증 확인 실패');
+        const data = await response.json();
+        return data.user;
+    } catch (error) {
+        console.error('인증 상태 확인 중 오류:', error);
+        return null;
+    }
+}
+
+/**
+ * 특정 연월의 이벤트 데이터를 서버에서 조회하는 함수입니다.
+ * 서버로부터 받은 데이터를 가공하여 캘린더에서 사용할 수 있는 형태로 변환합니다.
+ */
+async function getMonthEvents(year, month) {
+    try {
+        const response = await fetch(`./api/events/list.php?year=${year}&month=${month}`);
+        if (!response.ok) throw new Error('이벤트 데이터 조회 실패');
+        const data = await response.json();
+
+        // 서버 응답이 성공적이고 이벤트 배열이 있는 경우에만 반환
+        if (data.success && Array.isArray(data.events)) {
+            return data.events;
+        }
+        throw new Error('잘못된 이벤트 데이터 형식');
+    } catch (error) {
+        console.error('이벤트 조회 중 오류:', error);
+        return [];
+    }
+}
+
+/**
+ * 캘린더 헤더의 연월 표시를 업데이트하는 함수입니다.
  */
 export function updateCalendarHeader() {
     document.getElementById('currentMonth').textContent = `${getCurrentYear()}년 ${getCurrentMonth()}월`;
 }
 
 /**
- * 달력 HTML을 생성하는 함수
- * @returns {string} 달력 테이블의 tbody 내용이 될 HTML 문자열
+ * 특정 날짜의 이벤트 목록을 HTML로 변환하는 유틸리티 함수입니다.
  */
-export function generateCalendar() {
-    // 달력 생성에 필요한 기본 정보 설정
+function generateEventHtml(events, currentUser) {
+    return events
+        .filter((event) => {
+            // 비공개 일정은 작성자 본인만 볼 수 있음
+            if (event.is_private) {
+                return event.author === currentUser?.username;
+            }
+            return true;
+        })
+        .sort((a, b) => {
+            // 시간순 정렬
+            const timeA = parseInt(a.time.replace(':', ''));
+            const timeB = parseInt(b.time.replace(':', ''));
+            return timeA - timeB;
+        })
+        .map(
+            (event) => `
+            <div class="post-title ${event.important ? 'important' : ''}" data-event-id="${event.id}">
+                <span class="post-time">${event.time}</span>
+                ${event.title}
+            </div>
+        `
+        )
+        .join('');
+}
+
+/**
+ * 달력 HTML을 생성하는 함수입니다.
+ * 현재 연월의 모든 날짜와 각 날짜의 이벤트를 포함한 캘린더를 생성합니다.
+ */
+export async function generateCalendar() {
     const year = getCurrentYear();
     const month = getCurrentMonth();
-    const lastDay = new Date(year, month, 0).getDate(); // 해당 월의 마지막 날짜
-    const firstDayOfWeek = new Date(year, month - 1, 1).getDay(); // 1일의 요일 (0: 일요일)
+    const lastDay = new Date(year, month, 0).getDate();
+    const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
     const selectedDate = getSelectedDate();
-    const currentUser = getCurrentUser();
+
+    // 인증 상태와 이벤트 데이터를 병렬로 조회
+    console.log('데이터 조회 시작...');
+    const [currentUser, monthEvents] = await Promise.all([getAuthStatus(), getMonthEvents(year, month)]);
+    console.log('조회된 이벤트:', monthEvents);
 
     let calendar = '';
     let dayCount = 1;
 
-    // 6주 단위로 달력 생성 (최대 6주)
+    // 6주 단위로 달력 생성
     for (let week = 0; week < 6; week++) {
         let row = '<tr>';
 
         // 각 주의 7일을 생성
         for (let day = 0; day < 7; day++) {
-            // 첫 주의 시작 전이거나 마지막 날 이후인 경우 빈 셀
             if ((week === 0 && day < firstDayOfWeek) || dayCount > lastDay) {
                 row += '<td class="empty-day"></td>';
             } else if (dayCount <= lastDay) {
-                // 날짜 문자열 생성 (YYYY-MM-DD 형식)
                 const dateString = `${year}-${String(month).padStart(2, '0')}-${String(dayCount).padStart(2, '0')}`;
 
-                // 해당 날짜의 이벤트 필터링 및 정렬
-                const dayEvents = mockData.events
-                    .filter((event) => {
-                        // 비공개 일정은 작성자 본인만 볼 수 있음
-                        if (event.isPrivate) {
-                            return event.author === currentUser?.username;
-                        }
-                        return true;
-                    })
-                    // 해당 날짜의 이벤트만 선택
-                    .filter((event) => event.date === dateString)
-                    // 시간순으로 정렬
-                    .sort((a, b) => {
-                        const timeA = parseInt(a.time.replace(':', ''));
-                        const timeB = parseInt(b.time.replace(':', ''));
-                        return timeA - timeB;
-                    });
+                // 해당 날짜의 이벤트 필터링
+                const dayEvents = monthEvents.filter((event) => event.date === dateString);
 
-                // 특별한 날짜 상태 체크
+                // 날짜 상태 확인
                 const isWeekend = day === 0 || day === 6;
                 const isToday = new Date().toDateString() === new Date(year, month - 1, dayCount).toDateString();
                 const isSelected = dateString === selectedDate;
-
-                // 이벤트 목록 HTML 생성
-                let eventHtml = dayEvents
-                    .map(
-                        (event) => `
-                        <div class="post-title ${event.important ? 'important' : ''}" data-event-id="${event.id}">
-                            <span class="post-time">${event.time}</span>
-                            ${event.title}
-                        </div>
-                    `
-                    )
-                    .join('');
 
                 // 날짜 셀 HTML 생성
                 row += `
                     <td class="${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected-date' : ''}"
                         data-date="${dateString}">
                         <div class="date-number">${dayCount}</div>
-                        ${eventHtml}
+                        ${generateEventHtml(dayEvents, currentUser)}
                     </td>
                 `;
                 dayCount++;
@@ -94,19 +130,30 @@ export function generateCalendar() {
         row += '</tr>';
         calendar += row;
 
-        // 월의 마지막 날까지 처리했으면 종료
-        if (dayCount > lastDay) {
-            break;
-        }
+        if (dayCount > lastDay) break;
     }
     return calendar;
 }
 
 /**
- * 생성된 캘린더 HTML을 DOM에 렌더링하는 함수
- * @example
- * renderCalendar();
+ * 생성된 캘린더 HTML을 DOM에 렌더링하는 함수입니다.
+ * 에러 발생 시 사용자에게 적절한 피드백을 제공합니다.
  */
-export function renderCalendar() {
-    document.querySelector('.calendar table tbody').innerHTML = generateCalendar();
+export async function renderCalendar() {
+    const calendarBody = document.querySelector('.calendar table tbody');
+    try {
+        calendarBody.innerHTML = '<tr><td colspan="7" class="text-center">캘린더를 불러오는 중...</td></tr>';
+        const calendarHtml = await generateCalendar();
+        calendarBody.innerHTML = calendarHtml;
+    } catch (error) {
+        console.error('캘린더 렌더링 중 오류:', error);
+        calendarBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-danger">
+                    캘린더를 불러오는 중 오류가 발생했습니다.<br>
+                    <small>잠시 후 다시 시도해주세요.</small>
+                </td>
+            </tr>
+        `;
+    }
 }

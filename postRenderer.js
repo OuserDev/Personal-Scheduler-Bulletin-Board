@@ -4,7 +4,24 @@
  */
 
 import { mockData } from './mockData.js';
-import { getCurrentUser } from './authState.js';
+
+/**
+ * 서버에서 현재 인증 상태를 확인하는 함수
+ * @returns {Promise<Object>} 사용자 정보를 포함한 인증 상태 객체
+ */
+async function checkAuthStatus() {
+    try {
+        const response = await fetch('./auth/checkAuth.php');
+        if (!response.ok) {
+            throw new Error('인증 상태 확인 실패');
+        }
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('인증 상태 확인 중 오류:', error);
+        return { isLoggedIn: false, user: null };
+    }
+}
 
 /**
  * 날짜 문자열을 Date 객체로 파싱하는 유틸리티 함수
@@ -32,23 +49,23 @@ export function updateSelectedDateTitle(date) {
 
 /**
  * 특정 날짜의 일정을 렌더링하는 함수
+ * PHP 세션 기반 인증을 사용하도록 수정
  * @param {string} date - YYYY-MM-DD 형식의 날짜 문자열
  */
-export function renderDayEvents(date) {
-    const currentUser = getCurrentUser();
+export async function renderDayEvents(date) {
+    // 인증 상태 확인
+    const { user } = await checkAuthStatus();
 
     // 일정 필터링 및 정렬
     const events = mockData.events
-        // 비공개 일정은 작성자만 볼 수 있도록 필터링
         .filter((event) => {
             if (event.isPrivate) {
-                return event.author === currentUser?.username;
+                // PHP 세션의 username으로 비교
+                return user && event.author === user.username;
             }
             return true;
         })
-        // 선택된 날짜의 일정만 필터링
         .filter((event) => event.date === date)
-        // 시간순으로 정렬
         .sort((a, b) => {
             const timeA = parseInt(a.time.replace(':', ''));
             const timeB = parseInt(b.time.replace(':', ''));

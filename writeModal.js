@@ -6,7 +6,6 @@
 import { mockData } from './mockData.js';
 import { renderCalendar } from './calendarRenderer.js';
 import { renderDayEvents, renderCommunityPosts, renderNotices } from './postRenderer.js';
-import { getCurrentUser } from './authState.js';
 
 /**
  * 모달 컨트롤러 클래스
@@ -16,6 +15,18 @@ class WriteModalController {
     constructor() {
         this.modal = null;
         this.currentEditingPost = null;
+    }
+
+    // 권한 확인을 위한 새로운 메서드 추가
+    async checkAuthStatus() {
+        try {
+            const response = await fetch('./auth/checkAuth.php');
+            if (!response.ok) throw new Error('인증 확인 실패');
+            return await response.json();
+        } catch (error) {
+            console.error('인증 상태 확인 중 오류:', error);
+            return { isLoggedIn: false, user: null };
+        }
     }
 
     /**
@@ -183,80 +194,103 @@ class WriteModalController {
     /**
      * 폼 제출 처리
      */
-    handleSubmit() {
-        const currentUser = getCurrentUser();
-        if (!currentUser) {
-            this.close();
-            if (confirm('로그인이 필요한 서비스입니다. 로그인 하시겠습니까?')) {
-                setTimeout(() => {
-                    document.getElementById('loginModal').style.display = 'block';
-                }, 100);
+    async handleSubmit() {
+        try {
+            // 인증 상태 확인
+            const { isLoggedIn, user } = await this.checkAuthStatus();
+
+            if (!isLoggedIn) {
+                this.close();
+                if (confirm('로그인이 필요한 서비스입니다. 로그인 하시겠습니까?')) {
+                    setTimeout(() => {
+                        document.getElementById('loginModal').style.display = 'block';
+                    }, 100);
+                }
+                return;
             }
-            return;
+
+            const title = document.getElementById('postTitle').value.trim();
+            const content = document.getElementById('postContent').value.trim();
+
+            if (!title || !content) {
+                alert('제목과 내용을 모두 입력해주세요.');
+                return;
+            }
+
+            let success = false;
+
+            switch (document.getElementById('postType').value) {
+                case 'schedule':
+                    success = await this.handleScheduleSubmit(title, content);
+                    break;
+                // 다른 케이스들은 아직 mockData 사용
+                case 'community':
+                    this.handleCommunitySubmit(title, content, user);
+                    success = true;
+                    break;
+                case 'notice':
+                    this.handleNoticeSubmit(title, content, user);
+                    success = true;
+                    break;
+            }
+
+            if (success) {
+                this.close();
+                alert(this.currentEditingPost ? '게시글이 수정되었습니다.' : '글이 등록되었습니다.');
+            }
+        } catch (error) {
+            console.error('제출 처리 중 오류 발생:', error);
+            alert('처리 중 오류가 발생했습니다.');
         }
-
-        const title = document.getElementById('postTitle').value.trim();
-        const content = document.getElementById('postContent').value.trim();
-
-        if (!title || !content) {
-            alert('제목과 내용을 모두 입력해주세요.');
-            return;
-        }
-
-        const today = new Date();
-        const dateStr = `${today.getMonth() + 1}월 ${today.getDate()}일`;
-
-        switch (document.getElementById('postType').value) {
-            case 'schedule':
-                this.handleScheduleSubmit(title, content, currentUser);
-                break;
-            case 'community':
-                this.handleCommunitySubmit(title, content, currentUser, dateStr);
-                break;
-            case 'notice':
-                this.handleNoticeSubmit(title, content, currentUser, dateStr);
-                break;
-        }
-
-        this.close();
-        alert(this.currentEditingPost ? '게시글이 수정되었습니다.' : '글이 등록되었습니다.');
     }
 
     /**
      * 일정 제출 처리
      */
-    handleScheduleSubmit(title, content, currentUser) {
+    async handleScheduleSubmit(title, content) {
         const eventDate = document.getElementById('eventDate').value;
         const eventTime = document.getElementById('eventTime').value;
         const important = document.getElementById('important').checked;
 
+        // 입력값 검증
         if (!eventDate || !eventTime) {
             alert('날짜와 시간을 모두 입력해주세요.');
             return;
         }
 
-        if (this.currentEditingPost) {
-            Object.assign(this.currentEditingPost, {
-                date: eventDate,
-                time: eventTime,
-                title: title,
-                content: content,
-                important: important,
+        try {
+            // 새 일정 생성 API 호출
+            const response = await fetch('./api/events/create.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    date: eventDate,
+                    time: eventTime,
+                    title: title,
+                    content: content,
+                    important: important,
+                }),
             });
-        } else {
-            mockData.events.push({
-                id: mockData.events.length + 1,
-                date: eventDate,
-                time: eventTime,
-                title: title,
-                content: content,
-                important: important,
-                author: currentUser.username,
-                isPrivate: true,
-            });
+
+            // 응답 처리
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || '일정 생성 중 오류가 발생했습니다.');
+            }
+
+            // 성공적으로 생성된 경우 UI 업데이트
+            await renderCalendar();
+            await renderDayEvents(eventDate);
+
+            return true;
+        } catch (error) {
+            console.error('일정 생성 실패:', error);
+            alert(error.message);
+            return false;
         }
-        renderCalendar();
-        renderDayEvents(eventDate);
     }
 
     /**
