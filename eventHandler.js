@@ -81,10 +81,3 @@ export function initializeEventHandlers() {
         });
     });
 }
-
-// TODO:
-// - 이벤트 리스너 cleanup 로직 추가
-// - 이벤트 위임(delegation) 패턴 적용 확대
-// - 이벤트 핸들러 디바운싱/쓰로틀링 적용
-// - 에러 핸들링 강화
-// - 이벤트 핸들러 성능 최적화

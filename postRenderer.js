@@ -3,9 +3,6 @@
  * 일정, 커뮤니티 게시글, 공지사항 등 각종 게시글의 UI 렌더링을 담당
  */
 
-import { mockData } from './mockData.js';
-import { showPostModal } from './modalHandler.js';
-
 /**
  * 서버에서 현재 인증 상태를 확인하는 함수
  * @returns {Promise<Object>} 사용자 정보를 포함한 인증 상태 객체
@@ -48,14 +45,14 @@ export function updateSelectedDateTitle(date) {
     document.getElementById('selectedDate').textContent = `${month}월 ${day}일의 일정 게시글 목록`;
 }
 
-/**
- * 특정 날짜의 일정을 렌더링하는 함수
- * PHP 세션 기반 인증을 사용하도록 수정
- * @param {string} date - YYYY-MM-DD 형식의 날짜 문자열
- */
 export async function renderDayEvents(date) {
     try {
-        const response = await fetch(`./api/events/list.php?date=${date}`);
+        // date 문자열에서 year와 month 추출
+        const selectedDate = new Date(date);
+        const year = selectedDate.getFullYear();
+        const month = selectedDate.getMonth() + 1; // JavaScript의 월은 0부터 시작하므로 1을 더함
+
+        const response = await fetch(`./api/events/list.php?type=event&year=${year}&month=${month}`);
         const data = await response.json();
 
         if (!data.success) {
@@ -63,7 +60,7 @@ export async function renderDayEvents(date) {
         }
 
         const events = data.events
-            .filter((event) => event.date === date)
+            .filter((event) => event.date === date) // 해당 날짜의 이벤트만 필터링
             .sort((a, b) => {
                 const timeA = parseInt(a.time.replace(':', ''));
                 const timeB = parseInt(b.time.replace(':', ''));
@@ -88,10 +85,10 @@ export async function renderDayEvents(date) {
 
         const listGroup = document.querySelector('.posts-card .list-group');
         listGroup.innerHTML = listHtml;
-
-        // ... 나머지 코드
     } catch (error) {
         console.error('일정 목록 렌더링 중 오류:', error);
+        const listGroup = document.querySelector('.posts-card .list-group');
+        listGroup.innerHTML = '<div class="text-center text-muted">일정을 불러오는 중 오류가 발생했습니다.</div>';
     }
 }
 
@@ -99,58 +96,59 @@ export async function renderDayEvents(date) {
  * 커뮤니티 게시글 목록을 렌더링하는 함수
  * 최신 글이 상단에 오도록 날짜순으로 정렬하여 표시
  */
-export function renderCommunityPosts() {
-    // 날짜 기준 내림차순 정렬
-    const sortedPosts = [...mockData.community].sort((a, b) => {
-        const dateA = parseDate(a.date);
-        const dateB = parseDate(b.date);
-        return dateB - dateA;
-    });
+// postRenderer.js 수정
+export async function renderCommunityPosts() {
+    try {
+        const response = await fetch('./api/events/list.php?type=community');
+        const data = await response.json();
 
-    // 게시글 목록 HTML 생성
-    const listHtml = sortedPosts
-        .map(
-            (post) => `
+        if (!data.success) {
+            throw new Error(data.error || '게시글을 불러올 수 없습니다.');
+        }
+
+        const listHtml = data.items
+            .map(
+                (post) => `
             <div class="list-group-item" data-post-id="${post.id}">
                 <div class="d-flex w-100 justify-content-between">
                     <h6 class="mb-1">${post.title}</h6>
-                    <small>${post.author} · ${post.date}</small>
+                    <small>${post.author_name} · ${post.date}</small>
                 </div>
             </div>
         `
-        )
-        .join('');
+            )
+            .join('');
 
-    // DOM 업데이트
-    document.querySelector('.untagged-card .list-group').innerHTML = listHtml;
+        document.querySelector('.untagged-card .list-group').innerHTML = listHtml;
+    } catch (error) {
+        console.error('커뮤니티 게시글 로딩 실패:', error);
+    }
 }
 
-/**
- * 공지사항 목록을 렌더링하는 함수
- * 최신 공지가 상단에 오도록 날짜순으로 정렬하여 표시
- */
-export function renderNotices() {
-    // 날짜 기준 내림차순 정렬
-    const sortedNotices = [...mockData.notices].sort((a, b) => {
-        const dateA = parseDate(a.date);
-        const dateB = parseDate(b.date);
-        return dateB - dateA;
-    });
+export async function renderNotices() {
+    try {
+        const response = await fetch('./api/events/list.php?type=notice');
+        const data = await response.json();
 
-    // 공지사항 목록 HTML 생성
-    const listHtml = sortedNotices
-        .map(
-            (notice) => `
+        if (!data.success) {
+            throw new Error(data.error || '공지사항을 불러올 수 없습니다.');
+        }
+
+        const listHtml = data.items
+            .map(
+                (notice) => `
             <div class="list-group-item" data-post-id="${notice.id}">
                 <div class="d-flex w-100 justify-content-between">
                     <h6 class="mb-1">${notice.title}</h6>
-                    <small>${notice.author} · ${notice.date}</small>
+                    <small>${notice.author_name} · ${notice.date}</small>
                 </div>
             </div>
         `
-        )
-        .join('');
+            )
+            .join('');
 
-    // DOM 업데이트
-    document.querySelector('.notice-card .list-group').innerHTML = listHtml;
+        document.querySelector('.notice-card .list-group').innerHTML = listHtml;
+    } catch (error) {
+        console.error('공지사항 로딩 실패:', error);
+    }
 }
