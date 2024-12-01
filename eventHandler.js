@@ -1,6 +1,8 @@
 /**
- * eventHandler.js - 이벤트 핸들러 관리 모듈
- * 애플리케이션의 전역 이벤트 핸들러를 초기화하고 관리하는 모듈
+ * eventHandler.js
+ *
+ * 웹사이트의 모든 이벤트(클릭, 날짜 선택 등) 관리
+ * 캘린더, 게시판, 팝업창 등의 동작 처리
  */
 
 import { initializeDate, prevMonth, nextMonth, setSelectedDate } from './calendarState.js';
@@ -10,73 +12,58 @@ import { initializeModalHandlers } from './modalHandler.js';
 import { initializeWriteModal } from './writeModal.js';
 
 /**
- * 애플리케이션의 모든 이벤트 핸들러를 초기화하는 함수
- * DOM이 로드된 후 캘린더, 게시판, 모달 등의 모든 UI 요소를 초기화하고
- * 필요한 이벤트 리스너를 등록
- *
- * @example
- * initializeEventHandlers();
+ * 웹사이트 실행 시 필요한 모든 기능 초기화
+ * 1. 캘린더 초기 설정
+ * 2. 오늘 날짜 처리
+ * 3. 화면 표시
+ * 4. 각종 버튼 연결
  */
 export function initializeEventHandlers() {
     document.addEventListener('DOMContentLoaded', () => {
-        // 캘린더 초기 상태 설정
+        // 캘린더 기본 설정
         initializeDate();
         updateCalendarHeader();
 
-        /**
-         * 오늘 날짜를 YYYY-MM-DD 형식으로 변환하여 기본 선택으로 설정
-         * padStart를 사용하여 월과 일이 항상 2자리로 표시되도록 함
-         */
+        // 오늘 날짜 YYYY-MM-DD 형식으로 변환
+        // 예: 2024-12-25
         const today = new Date();
         const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-        // 오늘 날짜를 선택된 날짜로 설정
+        // 오늘 날짜 선택하고 화면에 표시
         setSelectedDate(todayString);
+        renderCalendar(); // 캘린더
+        renderCommunityPosts(); // 커뮤니티 글 목록
+        renderNotices(); // 공지사항 목록
+        renderDayEvents(todayString); // 오늘 일정
+        updateSelectedDateTitle(todayString); // 날짜 제목
 
-        // 초기 UI 렌더링
-        renderCalendar(); // 캘린더 렌더링
-        renderCommunityPosts(); // 커뮤니티 게시글 렌더링
-        renderNotices(); // 공지사항 렌더링
-        renderDayEvents(todayString); // 오늘의 일정 렌더링
-        updateSelectedDateTitle(todayString); // 선택된 날짜 제목 업데이트
+        // 팝업창 설정
+        initializeWriteModal(); // 글쓰기 창
+        initializeModalHandlers(); // 기타 팝업창
 
-        // 모달 초기화
-        initializeWriteModal(); // 글쓰기 모달 초기화
-        initializeModalHandlers(); // 기타 모달 핸들러 초기화
-
-        /**
-         * 이전 월 버튼 클릭 이벤트 핸들러
-         * 캘린더를 이전 월로 이동하고 UI를 업데이트
-         */
+        // 이전/다음 달 버튼
         document.getElementById('prevMonth').addEventListener('click', () => {
             prevMonth();
             updateCalendarHeader();
             renderCalendar();
         });
 
-        /**
-         * 다음 월 버튼 클릭 이벤트 핸들러
-         * 캘린더를 다음 월로 이동하고 UI를 업데이트
-         */
         document.getElementById('nextMonth').addEventListener('click', () => {
             nextMonth();
             updateCalendarHeader();
             renderCalendar();
         });
 
-        /**
-         * 캘린더 날짜 셀 클릭 이벤트 핸들러
-         * 선택된 날짜의 일정을 표시하고 UI를 업데이트
-         */
+        // 날짜 선택시
         document.querySelector('.calendar').addEventListener('click', (e) => {
             const cell = e.target.closest('td');
-            // 빈 날짜 셀이 아닌 경우에만 처리
+            // 빈 칸이 아닌 날짜만 처리
             if (cell && !cell.classList.contains('empty-day')) {
                 const date = cell.dataset.date;
-                setSelectedDate(date); // 선택된 날짜 업데이트
-                renderCalendar(); // 캘린더 UI 업데이트
-                renderDayEvents(date); // 해당 날짜의 일정 표시
-                updateSelectedDateTitle(date); // 날짜 제목 업데이트
+                setSelectedDate(date); // 선택한 날짜 저장
+                renderCalendar(); // 캘린더 다시 그리기
+                renderDayEvents(date); // 해당 날짜 일정 표시
+                updateSelectedDateTitle(date); // 날짜 제목 변경
             }
         });
     });

@@ -118,11 +118,8 @@ export async function generateCalendar() {
                 // 해당 날짜의 이벤트 필터링
                 // 해당 날짜의 이벤트 필터링 부분 수정
                 const dayEvents = monthEvents.filter((event) => {
-                    console.log(`이벤트 비교: ${event.date} vs ${dateString}`);
-                    console.log('이벤트 객체:', event);
                     return event.date === dateString;
                 });
-                console.log(`${dateString} 날짜의 필터링된 이벤트:`, dayEvents);
 
                 // 날짜 상태 확인
                 const isWeekend = day === 0 || day === 6;
