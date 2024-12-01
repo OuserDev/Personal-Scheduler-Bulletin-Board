@@ -16,51 +16,52 @@ $userId = $currentUser ? $currentUser['id'] : null;
 try {
     $pdo = getDBConnection();
     
-	// list.php의 SQL 쿼리 부분 수정
-	$baseQuery = "
-		SELECT 
-			e.id,
-			e.date,
-			e.time,
-			e.title,
-			e.content,
-			e.important,
-			e.is_private,
-			u.username as author,
-			u.name as author_name
-		FROM events e
-		JOIN users u ON e.author_id = u.id
-		WHERE YEAR(e.date) = ? 
-		AND MONTH(e.date) = ?
-		AND (
-			e.is_private = 0
-	";
+    // 월 시작일과 종료일 계산
+    $startDate = sprintf('%04d-%02d-01', $year, $month);
+    $endDate = sprintf('%04d-%02d-%02d', $year, $month, date('t', strtotime($startDate)));
+    
+    $baseQuery = "
+        SELECT 
+            e.id,
+            e.date,
+            e.time,
+            e.title,
+            e.content,
+            e.important,
+            e.is_private,
+            u.username as author,
+            u.name as author_name
+        FROM events e
+        JOIN users u ON e.author_id = u.id
+        WHERE e.date BETWEEN ? AND ?
+        AND (
+            e.is_private = 0
+    ";
 
-	if ($userId) {
-		$baseQuery .= " OR (e.is_private = 1 AND e.author_id = ?)";
-	}
+    if ($userId) {
+        $baseQuery .= " OR (e.is_private = 1 AND e.author_id = ?)";
+    }
 
-	$baseQuery .= ")
-		ORDER BY e.date ASC, e.time ASC";
+    $baseQuery .= ")
+        ORDER BY e.date ASC, e.time ASC";
     
     $stmt = $pdo->prepare($baseQuery);
     
     // 쿼리 파라미터를 바인딩합니다
     if ($userId) {
-        $stmt->execute([$year, $month, $userId]);
+        $stmt->execute([$startDate, $endDate, $userId]);
     } else {
-        $stmt->execute([$year, $month]);
+        $stmt->execute([$startDate, $endDate]);
     }
     
     $events = $stmt->fetchAll();
     
     // 날짜 형식을 일관되게 맞춰줍니다
-	foreach ($events as &$event) {
-		// 날짜를 YYYY-MM-DD 형식으로 표준화
-		$originalDate = $event['date'];
-		$event['date'] = date('Y-m-d', strtotime($event['date']));
-		error_log("Date conversion: $originalDate -> {$event['date']}");
-	}
+    foreach ($events as &$event) {
+        $event['date'] = date('Y-m-d', strtotime($event['date']));
+    }
+    
+    error_log("Fetched events for $year-$month: " . count($events));
     
     sendJSON([
         'success' => true,

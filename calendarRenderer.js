@@ -27,8 +27,11 @@ async function getAuthStatus() {
  */
 async function getMonthEvents(year, month) {
     try {
-        console.log(`이벤트 조회 시도: ${year}년 ${month}월`);
-        const response = await fetch(`./api/events/list.php?year=${year}&month=${month}`);
+        // month를 2자리 숫자로 변환
+        const paddedMonth = month.toString().padStart(2, '0');
+        console.log(`이벤트 조회 시도: ${year}년 ${paddedMonth}월`);
+
+        const response = await fetch(`./api/events/list.php?year=${year}&month=${paddedMonth}`);
         const data = await response.json();
         console.log('서버 응답:', data);
 
