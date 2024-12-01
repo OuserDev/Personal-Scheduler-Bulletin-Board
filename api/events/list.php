@@ -16,32 +16,32 @@ $userId = $currentUser ? $currentUser['id'] : null;
 try {
     $pdo = getDBConnection();
     
-    // 기본 쿼리는 공개 일정만 조회합니다
-    $baseQuery = "
-        SELECT 
-            e.id,
-            e.date,
-            e.time,
-            e.title,
-            e.content,
-            e.important,
-            e.is_private,
-            u.username as author,
-            u.name as author_name
-        FROM events e
-        JOIN users u ON e.author_id = u.id
-        WHERE YEAR(e.date) = ? AND MONTH(e.date) = ?
-        AND (
-            e.is_private = 0
-    ";
-    
-    // 로그인한 사용자의 경우 자신의 비공개 일정도 함께 조회합니다
-    if ($userId) {
-        $baseQuery .= " OR (e.is_private = 1 AND e.author_id = ?)";
-    }
-    
-    $baseQuery .= ")
-        ORDER BY e.date ASC, e.time ASC";
+	// list.php의 SQL 쿼리 부분 수정
+	$baseQuery = "
+		SELECT 
+			e.id,
+			e.date,
+			e.time,
+			e.title,
+			e.content,
+			e.important,
+			e.is_private,
+			u.username as author,
+			u.name as author_name
+		FROM events e
+		JOIN users u ON e.author_id = u.id
+		WHERE YEAR(e.date) = ? 
+		AND MONTH(e.date) = ?
+		AND (
+			e.is_private = 0
+	";
+
+	if ($userId) {
+		$baseQuery .= " OR (e.is_private = 1 AND e.author_id = ?)";
+	}
+
+	$baseQuery .= ")
+		ORDER BY e.date ASC, e.time ASC";
     
     $stmt = $pdo->prepare($baseQuery);
     
@@ -55,16 +55,12 @@ try {
     $events = $stmt->fetchAll();
     
     // 날짜 형식을 일관되게 맞춰줍니다
-    foreach ($events as &$event) {
-        // 날짜를 YYYY-MM-DD 형식으로 표준화
-        $event['date'] = date('Y-m-d', strtotime($event['date']));
-        
-        // 민감한 정보는 제외하고 전송
-        unset($event['author_id']);
-        
-        // 작성자 표시 방식 통일
-        $event['author'] = $event['is_private'] ? $event['author_name'] : '관리자';
-    }
+	foreach ($events as &$event) {
+		// 날짜를 YYYY-MM-DD 형식으로 표준화
+		$originalDate = $event['date'];
+		$event['date'] = date('Y-m-d', strtotime($event['date']));
+		error_log("Date conversion: $originalDate -> {$event['date']}");
+	}
     
     sendJSON([
         'success' => true,

@@ -27,15 +27,17 @@ async function getAuthStatus() {
  */
 async function getMonthEvents(year, month) {
     try {
+        console.log(`이벤트 조회 시도: ${year}년 ${month}월`);
         const response = await fetch(`./api/events/list.php?year=${year}&month=${month}`);
-        if (!response.ok) throw new Error('이벤트 데이터 조회 실패');
         const data = await response.json();
+        console.log('서버 응답:', data);
 
-        // 서버 응답이 성공적이고 이벤트 배열이 있는 경우에만 반환
         if (data.success && Array.isArray(data.events)) {
             return data.events;
+        } else {
+            console.error('잘못된 데이터 형식:', data);
+            return [];
         }
-        throw new Error('잘못된 이벤트 데이터 형식');
     } catch (error) {
         console.error('이벤트 조회 중 오류:', error);
         return [];
@@ -49,9 +51,11 @@ export function updateCalendarHeader() {
     document.getElementById('currentMonth').textContent = `${getCurrentYear()}년 ${getCurrentMonth()}월`;
 }
 
-/**
- * 특정 날짜의 이벤트 목록을 HTML로 변환하는 유틸리티 함수입니다.
- */
+function formatTime(timeString) {
+    if (!timeString) return '';
+    return timeString.substring(0, 5); // "HH:MM:SS" -> "HH:MM"
+}
+
 function generateEventHtml(events, currentUser) {
     return events
         .filter((event) => {
@@ -69,11 +73,11 @@ function generateEventHtml(events, currentUser) {
         })
         .map(
             (event) => `
-            <div class="post-title ${event.important ? 'important' : ''}" data-event-id="${event.id}">
-                <span class="post-time">${event.time}</span>
-                ${event.title}
-            </div>
-        `
+        <div class="post-title ${event.important === '1' ? 'important' : ''}" data-event-id="${event.id}">
+            <span class="post-time">${formatTime(event.time)}</span>
+            ${event.title}
+        </div>
+    `
         )
         .join('');
 }
@@ -109,7 +113,13 @@ export async function generateCalendar() {
                 const dateString = `${year}-${String(month).padStart(2, '0')}-${String(dayCount).padStart(2, '0')}`;
 
                 // 해당 날짜의 이벤트 필터링
-                const dayEvents = monthEvents.filter((event) => event.date === dateString);
+                // 해당 날짜의 이벤트 필터링 부분 수정
+                const dayEvents = monthEvents.filter((event) => {
+                    console.log(`이벤트 비교: ${event.date} vs ${dateString}`);
+                    console.log('이벤트 객체:', event);
+                    return event.date === dateString;
+                });
+                console.log(`${dateString} 날짜의 필터링된 이벤트:`, dayEvents);
 
                 // 날짜 상태 확인
                 const isWeekend = day === 0 || day === 6;

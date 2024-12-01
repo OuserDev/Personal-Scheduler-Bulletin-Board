@@ -3,27 +3,12 @@
  * 게시글 조회, 수정, 삭제 관련 모달 UI와 이벤트를 관리하는 모듈
  */
 
-import { mockData } from './mockData.js';
-import { initializeWriteModal } from './writeModal.js';
 import { renderCalendar } from './calendarRenderer.js';
 import { renderDayEvents, renderCommunityPosts, renderNotices } from './postRenderer.js';
+import { initializeWriteModal } from './writeModal.js';
 
 let postModal;
 const { openEditModal } = initializeWriteModal();
-
-/**
- * 서버에서 현재 사용자의 인증 상태를 확인하는 함수
- */
-async function checkAuthStatus() {
-    try {
-        const response = await fetch('./auth/checkAuth.php');
-        if (!response.ok) throw new Error('인증 상태 확인 실패');
-        return await response.json();
-    } catch (error) {
-        console.error('인증 상태 확인 중 오류:', error);
-        return { isLoggedIn: false, user: null };
-    }
-}
 
 /**
  * 게시글 삭제 처리 함수
@@ -32,35 +17,19 @@ async function checkAuthStatus() {
 async function deletePost(post, type) {
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
-    let endpoint;
-    let renderFunction;
-
-    // 게시글 유형에 따른 삭제 엔드포인트와 렌더링 함수 설정
-    switch (type) {
-        case 'event':
-            endpoint = './api/events/delete.php';
-            renderFunction = async () => {
-                await renderCalendar();
-                await renderDayEvents(post.date);
-            };
-            break;
-        case 'community':
-            endpoint = './api/posts/community/delete.php';
-            renderFunction = renderCommunityPosts;
-            break;
-        case 'notice':
-            endpoint = './api/posts/notices/delete.php';
-            renderFunction = renderNotices;
-            break;
-    }
-
     try {
+        // API 엔드포인트 설정
+        const endpoint = './api/events/delete.php';
+
+        // 삭제 요청
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ id: post.id }),
+            body: JSON.stringify({
+                id: post.id,
+            }),
         });
 
         const data = await response.json();
@@ -69,25 +38,42 @@ async function deletePost(post, type) {
             throw new Error(data.error || '게시글 삭제 중 오류가 발생했습니다');
         }
 
-        await renderFunction();
-        postModal.style.display = 'none';
+        // UI 업데이트
+        switch (type) {
+            case 'event':
+                await renderCalendar();
+                await renderDayEvents(post.date);
+                break;
+            case 'community':
+                await renderCommunityPosts();
+                break;
+            case 'notice':
+                await renderNotices();
+                break;
+        }
+
+        // 모달 닫기
+        if (postModal) {
+            postModal.style.display = 'none';
+        }
+
         alert('게시글이 삭제되었습니다.');
     } catch (error) {
         console.error('게시글 삭제 실패:', error);
-        alert(error.message);
+        alert(error.message || '게시글 삭제에 실패했습니다.');
     }
 }
 
 /**
  * 게시글 조회 모달 표시 함수
- * 권한 검사를 서버에서 수행하도록 수정
  */
-export async function showPostModal(post, type = null) {
+export async function showPostModal(post, type = 'event') {
     // 사용자 인증 상태 확인
-    const { user } = await checkAuthStatus();
+    const authResponse = await fetch('./auth/checkAuth.php');
+    const { isLoggedIn, user } = await authResponse.json();
 
     // 수정/삭제 권한 확인 로직
-    const canEdit = user && (post.author === user.username || post.author === user.name || (user.isAdmin && (post.author === '관리자' || type === 'notice')));
+    const canEdit = isLoggedIn && (post.author === user.username || (user.isAdmin && type === 'notice'));
 
     // 이전 모달 정리
     const existingModal = document.getElementById('postModal');
@@ -122,7 +108,7 @@ export async function showPostModal(post, type = null) {
                                 ? `<span class="post-metadata"><strong>${post.author}</strong> · ${post.date}</span>`
                                 : `<span class="post-metadata">
                                 <strong>${post.date} ${post.time}</strong>
-                                ${post.important ? '<span class="badge bg-danger">중요</span>' : ''}
+                                ${post.important === '1' || post.important === true ? '<span class="badge bg-danger">중요</span>' : ''}
                                </span>`
                         }
                     </div>
@@ -137,34 +123,70 @@ export async function showPostModal(post, type = null) {
 
     // 수정/삭제 권한이 있는 경우 이벤트 핸들러 설정
     if (canEdit) {
+        // 수정 버튼 클릭 이벤트
         postModal.querySelector('.edit-btn').onclick = () => {
             postModal.style.display = 'none';
-            openEditModal(post, type || (post.time ? 'event' : post.author === '관리자' ? 'notice' : 'community'));
+            openEditModal(post, type);
         };
 
+        // 삭제 버튼 클릭 이벤트
         postModal.querySelector('.delete-btn').onclick = () => {
-            deletePost(post, type || (post.time ? 'event' : post.author === '관리자' ? 'notice' : 'community'));
+            deletePost(post, type);
         };
     }
 
+    // 닫기 버튼 이벤트
+    postModal.querySelector('.close-btn').onclick = () => {
+        postModal.style.display = 'none';
+    };
+
+    // 모달 표시
     postModal.style.display = 'block';
 }
 
 /**
  * 모달 관련 전체 이벤트 핸들러 초기화 함수
- * 비동기 이벤트 처리를 위해 수정
  */
 export function initializeModalHandlers() {
-    // 커뮤니티 게시글 클릭 이벤트
-    document.querySelector('.untagged-card .list-group').addEventListener('click', async (e) => {
+    // 날짜별 일정 클릭 이벤트
+    document.querySelector('.posts-card .list-group').addEventListener('click', async (e) => {
         const item = e.target.closest('.list-group-item');
         if (item) {
-            const postId = parseInt(item.dataset.postId);
-            const post = mockData.community.find((p) => p.id === postId);
-            if (post) await showPostModal(post, 'community');
+            try {
+                const eventId = item.dataset.eventId;
+                const response = await fetch(`./api/events/view.php?id=${eventId}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || '게시글을 불러올 수 없습니다.');
+                }
+
+                await showPostModal(data.event, 'event');
+            } catch (error) {
+                console.error('게시글 조회 실패:', error);
+                alert(error.message);
+            }
         }
     });
 
-    // 이하 다른 이벤트 핸들러들도 동일한 방식으로 async/await 적용...
-    // (나머지 이벤트 핸들러 코드는 동일하되 async/await 추가)
+    // 캘린더의 일정 클릭 이벤트
+    document.querySelector('.calendar').addEventListener('click', async (e) => {
+        const eventTitle = e.target.closest('.post-title');
+        if (eventTitle) {
+            try {
+                const eventId = eventTitle.dataset.eventId;
+                const response = await fetch(`./api/events/view.php?id=${eventId}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || '게시글을 불러올 수 없습니다.');
+                }
+
+                await showPostModal(data.event, 'event');
+            } catch (error) {
+                console.error('게시글 조회 실패:', error);
+                alert(error.message);
+            }
+        }
+    });
 }

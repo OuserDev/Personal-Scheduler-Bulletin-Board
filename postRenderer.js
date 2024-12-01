@@ -4,6 +4,7 @@
  */
 
 import { mockData } from './mockData.js';
+import { showPostModal } from './modalHandler.js';
 
 /**
  * 서버에서 현재 인증 상태를 확인하는 함수
@@ -53,44 +54,45 @@ export function updateSelectedDateTitle(date) {
  * @param {string} date - YYYY-MM-DD 형식의 날짜 문자열
  */
 export async function renderDayEvents(date) {
-    // 인증 상태 확인
-    const { user } = await checkAuthStatus();
+    try {
+        const response = await fetch(`./api/events/list.php?date=${date}`);
+        const data = await response.json();
 
-    // 일정 필터링 및 정렬
-    const events = mockData.events
-        .filter((event) => {
-            if (event.isPrivate) {
-                // PHP 세션의 username으로 비교
-                return user && event.author === user.username;
-            }
-            return true;
-        })
-        .filter((event) => event.date === date)
-        .sort((a, b) => {
-            const timeA = parseInt(a.time.replace(':', ''));
-            const timeB = parseInt(b.time.replace(':', ''));
-            return timeA - timeB;
-        });
+        if (!data.success) {
+            throw new Error(data.error || '일정을 불러오는데 실패했습니다.');
+        }
 
-    // 일정 목록 HTML 생성
-    const listHtml = events
-        .map(
-            (event) => `
-        <div class="list-group-item" data-event-id="${event.id}">
-            <div class="d-flex w-100 justify-content-between align-items-center">
-                <div class="d-flex align-items-center gap-2">
-                    <span class="event-time">${event.time}</span>
-                    <h6 class="mb-0">${event.title}</h6>
-                    ${event.important ? '<span class="badge bg-danger">중요</span>' : ''}
+        const events = data.events
+            .filter((event) => event.date === date)
+            .sort((a, b) => {
+                const timeA = parseInt(a.time.replace(':', ''));
+                const timeB = parseInt(b.time.replace(':', ''));
+                return timeA - timeB;
+            });
+
+        const listHtml = events
+            .map(
+                (event) => `
+            <div class="list-group-item" data-event-id="${event.id}">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="event-time">${event.time}</span>
+                        <h6 class="mb-0">${event.title}</h6>
+                        ${event.important === '1' || event.important === true ? '<span class="badge bg-danger">중요</span>' : ''}
+                    </div>
                 </div>
             </div>
-        </div>
-    `
-        )
-        .join('');
+        `
+            )
+            .join('');
 
-    // DOM 업데이트
-    document.querySelector('.posts-card .list-group').innerHTML = listHtml;
+        const listGroup = document.querySelector('.posts-card .list-group');
+        listGroup.innerHTML = listHtml;
+
+        // ... 나머지 코드
+    } catch (error) {
+        console.error('일정 목록 렌더링 중 오류:', error);
+    }
 }
 
 /**

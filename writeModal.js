@@ -183,7 +183,7 @@ class WriteModalController {
             document.getElementById('scheduleFields').style.display = 'block';
             document.getElementById('eventDate').value = post.date;
             document.getElementById('eventTime').value = post.time;
-            document.getElementById('important').checked = post.important;
+            document.getElementById('important').checked = post.important === '1' || post.important === true;
         } else {
             document.getElementById('scheduleFields').style.display = 'none';
         }
@@ -247,56 +247,114 @@ class WriteModalController {
     /**
      * 일정 제출 처리
      */
-    async handleScheduleSubmit(title, content) {
-        const eventDate = document.getElementById('eventDate').value;
-        const eventTime = document.getElementById('eventTime').value;
-        const important = document.getElementById('important').checked;
-
-        // 입력값 검증
-        if (!eventDate || !eventTime) {
-            alert('날짜와 시간을 모두 입력해주세요.');
-            return;
-        }
-
+    /**
+     * 폼 제출 처리
+     */
+    async handleSubmit() {
         try {
-            // 새 일정 생성 API 호출
-            const response = await fetch('./api/events/create.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    date: eventDate,
-                    time: eventTime,
-                    title: title,
-                    content: content,
-                    important: important,
-                }),
-            });
+            const { isLoggedIn, user } = await this.checkAuthStatus();
 
-            // 응답 처리
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || '일정 생성 중 오류가 발생했습니다.');
+            if (!isLoggedIn) {
+                this.close();
+                if (confirm('로그인이 필요한 서비스입니다. 로그인 하시겠습니까?')) {
+                    setTimeout(() => {
+                        document.getElementById('loginModal').style.display = 'block';
+                    }, 100);
+                }
+                return;
             }
 
-            // 성공적으로 생성된 경우 UI 업데이트
-            await renderCalendar();
-            await renderDayEvents(eventDate);
+            const title = document.getElementById('postTitle').value.trim();
+            const content = document.getElementById('postContent').value.trim();
+            const postType = document.getElementById('postType').value;
 
-            return true;
+            if (!title || !content) {
+                alert('제목과 내용을 모두 입력해주세요.');
+                return;
+            }
+
+            let success = false;
+
+            // 일정 처리
+            if (postType === 'schedule') {
+                const eventDate = document.getElementById('eventDate').value;
+                const eventTime = document.getElementById('eventTime').value;
+                const important = document.getElementById('important').checked;
+
+                // 입력값 검증
+                if (!eventDate || !eventTime) {
+                    alert('날짜와 시간을 모두 입력해주세요.');
+                    return;
+                }
+
+                // API 엔드포인트와 요청 데이터 준비
+                const endpoint = this.currentEditingPost ? './api/events/update.php' : './api/events/create.php';
+
+                const requestData = {
+                    title,
+                    content,
+                    date: eventDate,
+                    time: eventTime,
+                    important,
+                };
+
+                // 수정 모드인 경우 id 추가
+                if (this.currentEditingPost) {
+                    requestData.id = this.currentEditingPost.id;
+                }
+
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestData),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || '처리 중 오류가 발생했습니다.');
+                    }
+
+                    // UI 업데이트
+                    await renderCalendar();
+                    await renderDayEvents(eventDate);
+
+                    success = true;
+                } catch (error) {
+                    console.error('일정 처리 실패:', error);
+                    alert(error.message);
+                    return;
+                }
+            }
+            // 커뮤니티와 공지사항은 아직 mockData 사용
+            else if (postType === 'community') {
+                this.handleCommunitySubmit(title, content, user);
+                success = true;
+            } else if (postType === 'notice') {
+                this.handleNoticeSubmit(title, content, user);
+                success = true;
+            }
+
+            if (success) {
+                this.close();
+                alert(this.currentEditingPost ? '게시글이 수정되었습니다.' : '글이 등록되었습니다.');
+            }
         } catch (error) {
-            console.error('일정 생성 실패:', error);
-            alert(error.message);
-            return false;
+            console.error('제출 처리 중 오류 발생:', error);
+            alert(error.message || '처리 중 오류가 발생했습니다.');
         }
     }
 
     /**
      * 커뮤니티 게시글 제출 처리
      */
-    handleCommunitySubmit(title, content, currentUser, dateStr) {
+    handleCommunitySubmit(title, content, currentUser) {
+        const today = new Date();
+        const dateStr = `${today.getMonth() + 1}월 ${today.getDate()}일`;
+
         if (this.currentEditingPost) {
             Object.assign(this.currentEditingPost, {
                 title: title,
@@ -317,7 +375,10 @@ class WriteModalController {
     /**
      * 공지사항 제출 처리
      */
-    handleNoticeSubmit(title, content, currentUser, dateStr) {
+    handleNoticeSubmit(title, content, currentUser) {
+        const today = new Date();
+        const dateStr = `${today.getMonth() + 1}월 ${today.getDate()}일`;
+
         if (!currentUser.isAdmin) {
             alert('공지사항은 관리자만 작성할 수 있습니다.');
             return;
