@@ -1,23 +1,17 @@
 /**
  * writeModal.js - 게시글 작성/수정 모달 컨트롤러
- * 일정, 커뮤니티 게시글, 공지사항 등의 작성과 수정을 위한 모달 UI 및 기능 관리
  */
 
-import { mockData } from './mockData.js';
 import { renderCalendar } from './calendarRenderer.js';
 import { renderDayEvents, renderCommunityPosts, renderNotices } from './postRenderer.js';
 
-/**
- * 모달 컨트롤러 클래스
- * 모달 UI와 관련된 모든 상태와 동작을 관리
- */
 class WriteModalController {
     constructor() {
         this.modal = null;
         this.currentEditingPost = null;
+        this.currentPostType = null;
     }
 
-    // 권한 확인을 위한 새로운 메서드 추가
     async checkAuthStatus() {
         try {
             const response = await fetch('./auth/checkAuth.php');
@@ -29,10 +23,6 @@ class WriteModalController {
         }
     }
 
-    /**
-     * 모달 HTML 템플릿
-     * @returns {string} 모달 HTML 문자열
-     */
     get modalTemplate() {
         return `
         <div id="writeModal" class="modal">
@@ -78,48 +68,52 @@ class WriteModalController {
         </div>`;
     }
 
-    /**
-     * 모달 초기화 함수
-     * 모달을 생성하고 이벤트 핸들러를 설정
-     */
     initialize() {
-        // 기존 모달 제거
         const existingModal = document.getElementById('writeModal');
         if (existingModal) {
             existingModal.remove();
         }
 
-        // 새 모달 추가
         document.body.insertAdjacentHTML('beforeend', this.modalTemplate);
         this.modal = document.getElementById('writeModal');
 
-        // 이벤트 핸들러 설정
         this.initializeEventHandlers();
         this.initializeNewPostButton();
     }
 
-    /**
-     * 모달 내부 이벤트 핸들러 초기화
-     */
     initializeEventHandlers() {
         document.getElementById('cancelBtn').onclick = () => this.close();
-        document.getElementById('postType').onchange = (e) => {
-            document.getElementById('scheduleFields').style.display = e.target.value === 'schedule' ? 'block' : 'none';
+
+        // postType select 요소의 change 이벤트 핸들러 수정
+        document.getElementById('postType').onchange = async (e) => {
+            const selectedType = e.target.value;
+
+            // 공지사항 선택 시 권한 체크
+            if (selectedType === 'notice') {
+                const { isLoggedIn, user } = await this.checkAuthStatus();
+                if (!isLoggedIn || !user.isAdmin) {
+                    alert('공지사항은 관리자만 작성할 수 있습니다.');
+                    // 선택을 커뮤니티로 되돌림
+                    e.target.value = 'community';
+                    return;
+                }
+            }
+
+            // 일정 필드 표시/숨김 처리
+            document.getElementById('scheduleFields').style.display = selectedType === 'schedule' ? 'block' : 'none';
         };
+
         document.getElementById('submitPost').onclick = () => this.handleSubmit();
     }
 
-    /**
-     * 새글쓰기 버튼 이벤트 핸들러 초기화
-     */
-    initializeNewPostButton() {
+    async initializeNewPostButton() {
         const newPostBtn = document.getElementById('newPostBtn');
         if (newPostBtn) {
-            newPostBtn.onclick = (e) => {
+            newPostBtn.onclick = async (e) => {
                 e.preventDefault();
-                const currentUser = getCurrentUser();
+                const authStatus = await this.checkAuthStatus();
 
-                if (!currentUser) {
+                if (!authStatus.isLoggedIn) {
                     if (confirm('로그인이 필요한 서비스입니다. 로그인 하시겠습니까?')) {
                         document.getElementById('loginModal').style.display = 'block';
                     }
@@ -131,11 +125,9 @@ class WriteModalController {
         }
     }
 
-    /**
-     * 폼 초기화
-     */
     reset() {
         this.currentEditingPost = null;
+        this.currentPostType = null;
         this.modal.querySelector('.modal-title').textContent = '새 글쓰기';
         document.getElementById('submitPost').textContent = '등록하기';
         document.getElementById('postTitle').value = '';
@@ -148,28 +140,18 @@ class WriteModalController {
         document.getElementById('scheduleFields').style.display = 'block';
     }
 
-    /**
-     * 모달 표시
-     */
     show() {
         this.modal.style.display = 'block';
     }
 
-    /**
-     * 모달 닫기
-     */
     close() {
         this.modal.style.display = 'none';
         this.reset();
     }
 
-    /**
-     * 게시글 수정 모달 열기
-     * @param {Object} post - 수정할 게시글 객체
-     * @param {string} type - 게시글 타입
-     */
     openEditModal(post, type) {
         this.currentEditingPost = post;
+        this.currentPostType = type;
         this.modal.querySelector('.modal-title').textContent = '게시글 수정';
         document.getElementById('submitPost').textContent = '수정하기';
 
@@ -191,65 +173,6 @@ class WriteModalController {
         this.show();
     }
 
-    /**
-     * 폼 제출 처리
-     */
-    async handleSubmit() {
-        try {
-            // 인증 상태 확인
-            const { isLoggedIn, user } = await this.checkAuthStatus();
-
-            if (!isLoggedIn) {
-                this.close();
-                if (confirm('로그인이 필요한 서비스입니다. 로그인 하시겠습니까?')) {
-                    setTimeout(() => {
-                        document.getElementById('loginModal').style.display = 'block';
-                    }, 100);
-                }
-                return;
-            }
-
-            const title = document.getElementById('postTitle').value.trim();
-            const content = document.getElementById('postContent').value.trim();
-
-            if (!title || !content) {
-                alert('제목과 내용을 모두 입력해주세요.');
-                return;
-            }
-
-            let success = false;
-
-            switch (document.getElementById('postType').value) {
-                case 'schedule':
-                    success = await this.handleScheduleSubmit(title, content);
-                    break;
-                // 다른 케이스들은 아직 mockData 사용
-                case 'community':
-                    this.handleCommunitySubmit(title, content, user);
-                    success = true;
-                    break;
-                case 'notice':
-                    this.handleNoticeSubmit(title, content, user);
-                    success = true;
-                    break;
-            }
-
-            if (success) {
-                this.close();
-                alert(this.currentEditingPost ? '게시글이 수정되었습니다.' : '글이 등록되었습니다.');
-            }
-        } catch (error) {
-            console.error('제출 처리 중 오류 발생:', error);
-            alert('처리 중 오류가 발생했습니다.');
-        }
-    }
-
-    /**
-     * 일정 제출 처리
-     */
-    /**
-     * 폼 제출 처리
-     */
     async handleSubmit() {
         try {
             const { isLoggedIn, user } = await this.checkAuthStatus();
@@ -273,74 +196,27 @@ class WriteModalController {
                 return;
             }
 
+            // 공지사항 권한 체크
+            if (postType === 'notice' && !user.isAdmin) {
+                alert('공지사항은 관리자만 작성할 수 있습니다.');
+                return;
+            }
+
             let success = false;
 
-            // 일정 처리
-            if (postType === 'schedule') {
-                const eventDate = document.getElementById('eventDate').value;
-                const eventTime = document.getElementById('eventTime').value;
-                const important = document.getElementById('important').checked;
-
-                // 입력값 검증
-                if (!eventDate || !eventTime) {
-                    alert('날짜와 시간을 모두 입력해주세요.');
-                    return;
-                }
-
-                // API 엔드포인트와 요청 데이터 준비
-                const endpoint = this.currentEditingPost ? './api/events/update.php' : './api/events/create.php';
-
-                const requestData = {
-                    title,
-                    content,
-                    date: eventDate,
-                    time: eventTime,
-                    important,
-                };
-
-                // 수정 모드인 경우 id 추가
-                if (this.currentEditingPost) {
-                    requestData.id = this.currentEditingPost.id;
-                }
-
-                try {
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(requestData),
-                    });
-
-                    const data = await response.json();
-
-                    if (!response.ok) {
-                        throw new Error(data.error || '처리 중 오류가 발생했습니다.');
-                    }
-
-                    // UI 업데이트
-                    await renderCalendar();
-                    await renderDayEvents(eventDate);
-
-                    success = true;
-                } catch (error) {
-                    console.error('일정 처리 실패:', error);
-                    alert(error.message);
-                    return;
-                }
-            }
-            // 커뮤니티와 공지사항은 아직 mockData 사용
-            else if (postType === 'community') {
-                this.handleCommunitySubmit(title, content, user);
-                success = true;
-            } else if (postType === 'notice') {
-                this.handleNoticeSubmit(title, content, user);
-                success = true;
+            switch (postType) {
+                case 'schedule':
+                    success = await this.handleScheduleSubmit();
+                    break;
+                case 'community':
+                case 'notice':
+                    success = await this.handlePostSubmit(postType);
+                    break;
             }
 
             if (success) {
                 this.close();
-                alert(this.currentEditingPost ? '게시글이 수정되었습니다.' : '글이 등록되었습니다.');
+                alert(this.currentEditingPost ? '게시글이 수정되었습니다.' : '게시글이 등록되었습니다.');
             }
         } catch (error) {
             console.error('제출 처리 중 오류 발생:', error);
@@ -348,67 +224,103 @@ class WriteModalController {
         }
     }
 
-    /**
-     * 커뮤니티 게시글 제출 처리
-     */
-    handleCommunitySubmit(title, content, currentUser) {
-        const today = new Date();
-        const dateStr = `${today.getMonth() + 1}월 ${today.getDate()}일`;
+    async handleScheduleSubmit() {
+        const title = document.getElementById('postTitle').value.trim();
+        const content = document.getElementById('postContent').value.trim();
+        const eventDate = document.getElementById('eventDate').value;
+        const eventTime = document.getElementById('eventTime').value;
+        const important = document.getElementById('important').checked;
+
+        if (!eventDate || !eventTime) {
+            alert('날짜와 시간을 모두 입력해주세요.');
+            return false;
+        }
+
+        const endpoint = this.currentEditingPost ? './api/events/update.php' : './api/events/create.php';
+        const requestData = {
+            title,
+            content,
+            date: eventDate,
+            time: eventTime,
+            important,
+        };
 
         if (this.currentEditingPost) {
-            Object.assign(this.currentEditingPost, {
-                title: title,
-                content: content,
-            });
-        } else {
-            mockData.community.unshift({
-                id: mockData.community.length + 1,
-                title: title,
-                content: content,
-                author: currentUser.name,
-                date: dateStr,
-            });
+            requestData.id = this.currentEditingPost.id;
         }
-        renderCommunityPosts();
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || '처리 중 오류가 발생했습니다.');
+        }
+
+        await renderCalendar();
+        if (eventDate) {
+            await renderDayEvents(eventDate);
+        }
+
+        return true;
     }
 
-    /**
-     * 공지사항 제출 처리
-     */
-    handleNoticeSubmit(title, content, currentUser) {
-        const today = new Date();
-        const dateStr = `${today.getMonth() + 1}월 ${today.getDate()}일`;
+    async handlePostSubmit(type) {
+        const title = document.getElementById('postTitle').value.trim();
+        const content = document.getElementById('postContent').value.trim();
 
-        if (!currentUser.isAdmin) {
-            alert('공지사항은 관리자만 작성할 수 있습니다.');
-            return;
-        }
+        let endpoint, requestData;
 
         if (this.currentEditingPost) {
-            Object.assign(this.currentEditingPost, {
-                title: title,
-                content: content,
-            });
+            endpoint = './api/posts/update.php';
+            requestData = {
+                id: this.currentEditingPost.id,
+                title,
+                content,
+                type, // 타입 정보 추가
+            };
         } else {
-            mockData.notices.unshift({
-                id: mockData.notices.length + 1,
-                title: title,
-                content: content,
-                author: '관리자',
-                date: dateStr,
-            });
+            endpoint = './api/posts/create.php';
+            requestData = {
+                title,
+                content,
+                type, // 타입 정보 추가
+            };
         }
-        renderNotices();
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || '처리 중 오류가 발생했습니다.');
+        }
+
+        // UI 업데이트
+        if (type === 'notice') {
+            await renderNotices();
+        } else {
+            await renderCommunityPosts();
+        }
+
+        return true;
     }
 }
 
-// 모달 컨트롤러 인스턴스 생성
 const writeModalController = new WriteModalController();
 
-/**
- * 모달 초기화 함수
- * @returns {Object} 모달 컨트롤러 인터페이스
- */
 export function initializeWriteModal() {
     writeModalController.initialize();
     return {
@@ -417,7 +329,6 @@ export function initializeWriteModal() {
     };
 }
 
-// 외부에서 사용할 수 있도록 reset 함수 export
 export function resetForm() {
     writeModalController.reset();
 }
